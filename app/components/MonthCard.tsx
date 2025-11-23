@@ -152,6 +152,9 @@ export function MonthCard({
     }
   }, [selected]);
 
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
   return (
     <div
       id={anchorId}
@@ -397,21 +400,53 @@ export function MonthCard({
                         {entry.id && onDeleteEntry ? (
                           <form
                             action={async (formData) => {
+                              if (!entry.id) return;
+                              setDeletingId(entry.id);
+                              const minDelay = sleep(2000);
                               formData.set("id", `${entry.id}`);
-                              await onDeleteEntry(formData);
-                              startTransition(() => router.refresh());
+                              try {
+                                await Promise.all([onDeleteEntry(formData), minDelay]);
+                                startTransition(() => router.refresh());
+                              } finally {
+                                setDeletingId((current) => (current === entry.id ? null : current));
+                              }
                             }}
                           >
                             <input type="hidden" name="id" value={entry.id} />
                             <button
                               type="submit"
-                              className="flex h-8 w-8 items-center justify-center rounded-full border border-red-400/50 bg-red-500/20 text-red-200 transition hover:bg-red-500/30"
+                              disabled={deletingId === entry.id}
+                              className="flex h-8 w-8 items-center justify-center rounded-full border border-red-400/50 bg-red-500/20 text-red-200 transition hover:bg-red-500/30 disabled:cursor-not-allowed disabled:opacity-60"
                               title="Supprimer la séance"
                               aria-label="Supprimer la séance"
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
-                                <path d="M9.5 3a1 1 0 0 0-.894.553L8.118 5H5a1 1 0 1 0 0 2h14a1 1 0 1 0 0-2h-3.118l-.488-.947A1 1 0 0 0 14.5 3h-5Zm-3 6.5a.75.75 0 0 1 1.5 0v8a.75.75 0 0 1-1.5 0v-8Zm4.25 0a.75.75 0 0 1 1.5 0v8a.75.75 0 0 1-1.5 0v-8Zm5.75-.75a.75.75 0 0 0-1.5 0v8a.75.75 0 0 0 1.5 0v-8Zm-2-1.75a1 1 0 0 1 1 1v8a2.75 2.75 0 0 1-2.75 2.75h-3.5A2.75 2.75 0 0 1 6.5 16v-8a1 1 0 0 1 1-1h6.5Z" />
-                              </svg>
+                              {deletingId === entry.id ? (
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  className="h-4 w-4 animate-spin text-red-100"
+                                >
+                                  <circle
+                                    cx="12"
+                                    cy="12"
+                                    r="9"
+                                    stroke="currentColor"
+                                    strokeWidth="3"
+                                    opacity="0.25"
+                                  />
+                                  <path
+                                    d="M21 12a9 9 0 0 1-9 9"
+                                    stroke="currentColor"
+                                    strokeWidth="3"
+                                    strokeLinecap="round"
+                                  />
+                                </svg>
+                              ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                                  <path d="M9.5 3a1 1 0 0 0-.894.553L8.118 5H5a1 1 0 1 0 0 2h14a1 1 0 1 0 0-2h-3.118l-.488-.947A1 1 0 0 0 14.5 3h-5Zm-3 6.5a.75.75 0 0 1 1.5 0v8a.75.75 0 0 1-1.5 0v-8Zm4.25 0a.75.75 0 0 1 1.5 0v8a.75.75 0 0 1-1.5 0v-8Zm5.75-.75a.75.75 0 0 0-1.5 0v8a.75.75 0 0 0 1.5 0v-8Zm-2-1.75a1 1 0 0 1 1 1v8a2.75 2.75 0 0 1-2.75 2.75h-3.5A2.75 2.75 0 0 1 6.5 16v-8a1 1 0 0 1 1-1h6.5Z" />
+                                </svg>
+                              )}
                             </button>
                           </form>
                         ) : null}
