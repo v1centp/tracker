@@ -52,11 +52,7 @@ export function MonthCard({
   useEffect(() => {
     if (!selected) return;
     const match = days.find((d) => d.dateKey === selected.dateKey && d.day === selected.day);
-    if (match) {
-      setSelected(match);
-    } else {
-      setSelected(null);
-    }
+    setSelected(match ?? null);
   }, [days, selected]);
 
   const selectedSummary = useMemo(() => {
@@ -153,7 +149,6 @@ export function MonthCard({
   }, [selected]);
 
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
   return (
     <div
@@ -197,7 +192,10 @@ export function MonthCard({
 
       <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
         <StatBox label="Durée" value={monthHours} />
-        <StatBox label="Séances" value={`${days.reduce((sum, d) => sum + d.entries.length, 0)}`} />
+        <StatBox
+          label="Séances"
+          value={`${days.reduce((sum, d) => sum + d.entries.length, 0)}`}
+        />
         <StatBox label="Jours actifs" value={`${activeDays}`} />
       </div>
 
@@ -289,8 +287,8 @@ export function MonthCard({
 
       <div className="mt-5 space-y-2">
         <div className="grid grid-cols-7 gap-2 text-center text-[11px] uppercase tracking-[0.16em] text-slate-400 sm:text-xs">
-          {weekdays.map((weekday) => (
-            <span key={weekday}>{weekday}</span>
+          {weekdays.map((weekday, idx) => (
+            <span key={`weekday-${idx}`}>{weekday}</span>
           ))}
         </div>
         <div className="grid grid-cols-7 gap-2">
@@ -313,7 +311,7 @@ export function MonthCard({
             const isToday = currentDayKey && currentDayKey === day.dateKey;
             return (
               <button
-                key={`${monthName}-${day.dateKey ?? day.day}`}
+                key={`${monthName}-${day.dateKey ?? `${day.day}-${idx}`}`}
                 type="button"
                 onClick={() => setSelected(day)}
                 className={`group relative flex aspect-[1/1] flex-col items-center justify-center gap-2 rounded-2xl px-2 py-2 text-xs transition ${
@@ -393,62 +391,59 @@ export function MonthCard({
                           ) : null}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-white">
-                          {entry.lengthMinutes ? formatDuration(entry.lengthMinutes) : "—"}
-                        </span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-white">
+                {entry.lengthMinutes ? formatDuration(entry.lengthMinutes) : "—"}
+              </span>
                         {entry.id && onDeleteEntry ? (
-                          <form
-                            action={async (formData) => {
+                          <button
+                            type="button"
+                            onClick={async () => {
                               if (!entry.id) return;
                               setDeletingId(entry.id);
-                              const minDelay = sleep(2000);
+                              const formData = new FormData();
                               formData.set("id", `${entry.id}`);
                               try {
-                                await Promise.all([onDeleteEntry(formData), minDelay]);
+                                await onDeleteEntry(formData);
                                 startTransition(() => router.refresh());
+                                setSelected(null);
                               } finally {
                                 setDeletingId((current) => (current === entry.id ? null : current));
                               }
                             }}
+                            disabled={deletingId === entry.id}
+                            className="flex h-8 w-8 items-center justify-center rounded-full border border-red-400/50 bg-red-500/20 text-red-200 transition hover:bg-red-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                            title="Supprimer la séance"
+                            aria-label="Supprimer la séance"
                           >
-                            <input type="hidden" name="id" value={entry.id} />
-                            <button
-                              type="submit"
-                              disabled={deletingId === entry.id}
-                              className="flex h-8 w-8 items-center justify-center rounded-full border border-red-400/50 bg-red-500/20 text-red-200 transition hover:bg-red-500/30 disabled:cursor-not-allowed disabled:opacity-60"
-                              title="Supprimer la séance"
-                              aria-label="Supprimer la séance"
-                            >
-                              {deletingId === entry.id ? (
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  className="h-4 w-4 animate-spin text-red-100"
-                                >
-                                  <circle
-                                    cx="12"
-                                    cy="12"
-                                    r="9"
-                                    stroke="currentColor"
-                                    strokeWidth="3"
-                                    opacity="0.25"
-                                  />
-                                  <path
-                                    d="M21 12a9 9 0 0 1-9 9"
-                                    stroke="currentColor"
-                                    strokeWidth="3"
-                                    strokeLinecap="round"
-                                  />
-                                </svg>
-                              ) : (
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
-                                  <path d="M9.5 3a1 1 0 0 0-.894.553L8.118 5H5a1 1 0 1 0 0 2h14a1 1 0 1 0 0-2h-3.118l-.488-.947A1 1 0 0 0 14.5 3h-5Zm-3 6.5a.75.75 0 0 1 1.5 0v8a.75.75 0 0 1-1.5 0v-8Zm4.25 0a.75.75 0 0 1 1.5 0v8a.75.75 0 0 1-1.5 0v-8Zm5.75-.75a.75.75 0 0 0-1.5 0v8a.75.75 0 0 0 1.5 0v-8Zm-2-1.75a1 1 0 0 1 1 1v8a2.75 2.75 0 0 1-2.75 2.75h-3.5A2.75 2.75 0 0 1 6.5 16v-8a1 1 0 0 1 1-1h6.5Z" />
-                                </svg>
-                              )}
-                            </button>
-                          </form>
+                            {deletingId === entry.id ? (
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                className="h-4 w-4 animate-spin text-red-100"
+                              >
+                                <circle
+                                  cx="12"
+                                  cy="12"
+                                  r="9"
+                                  stroke="currentColor"
+                                  strokeWidth="3"
+                                  opacity="0.25"
+                                />
+                                <path
+                                  d="M21 12a9 9 0 0 1-9 9"
+                                  stroke="currentColor"
+                                  strokeWidth="3"
+                                  strokeLinecap="round"
+                                />
+                              </svg>
+                            ) : (
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                                <path d="M9.5 3a1 1 0 0 0-.894.553L8.118 5H5a1 1 0 1 0 0 2h14a1 1 0 1 0 0-2h-3.118l-.488-.947A1 1 0 0 0 14.5 3h-5Zm-3 6.5a.75.75 0 0 1 1.5 0v8a.75.75 0 0 1-1.5 0v-8Zm4.25 0a.75.75 0 0 1 1.5 0v8a.75.75 0 0 1-1.5 0v-8Zm5.75-.75a.75.75 0 0 0-1.5 0v8a.75.75 0 0 0 1.5 0v-8Zm-2-1.75a1 1 0 0 1 1 1v8a2.75 2.75 0 0 1-2.75 2.75h-3.5A2.75 2.75 0 0 1 6.5 16v-8a1 1 0 0 1 1-1h6.5Z" />
+                              </svg>
+                            )}
+                          </button>
                         ) : null}
                       </div>
                     </div>
@@ -457,7 +452,6 @@ export function MonthCard({
               ) : (
                 <p className="text-sm text-slate-300">Pas encore de séance pour ce jour.</p>
               )}
-
               <form
                 action={async (formData) => {
                   if (onAddEntry) {
