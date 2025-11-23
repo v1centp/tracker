@@ -456,6 +456,8 @@ export function MonthCard({
                       type="number"
                       name="hours"
                       min="0"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       className="mt-1 w-full rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-white/20 focus:ring-white/30"
                     />
                   </label>
@@ -466,6 +468,8 @@ export function MonthCard({
                       name="minutes"
                         min="0"
                         max="59"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         className="mt-1 w-full rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-white/20 focus:ring-white/30"
                       />
                     </label>
