@@ -1,4 +1,5 @@
-const CACHE_NAME = "tracker-shell-v1";
+// Cache only app shell assets; never cache API calls (Supabase or other origins).
+const CACHE_NAME = "tracker-shell-v2";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -23,6 +24,12 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
+
+  const url = new URL(request.url);
+  // Always go to network for external domains (Supabase) to avoid stale data.
+  if (url.origin !== self.location.origin) {
+    return;
+  }
 
   event.respondWith(
     caches.match(request).then((cached) => {
