@@ -27,7 +27,8 @@ export function formatDay(date: Date) {
   return `${y}-${m}-${d}`;
 }
 
-function toISODate(value: string) {
+function toISODate(value?: string | null) {
+  if (!value) return null;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
   return formatDay(d);
