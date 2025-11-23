@@ -272,12 +272,6 @@ export default async function Home({
             </h1>
             <p className="text-base text-slate-300">Toutes tes séances sur plusieurs années.</p>
           </div>
-          <Link
-            href="/add"
-            className="rounded-2xl bg-linear-to-r from-orange-500 via-amber-400 to-yellow-300 px-5 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-orange-500/30 transition hover:brightness-105"
-          >
-            Activités
-          </Link>
         </header>
 
         <div className="grid grid-cols-1 gap-3 rounded-3xl bg-white/5 p-4 ring-1 ring-white/10 sm:grid-cols-3">

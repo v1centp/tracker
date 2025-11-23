@@ -146,6 +146,12 @@ export function MonthCard({
     };
   }, [chartActivity, dayMetrics, metric]);
 
+  useEffect(() => {
+    if (selected) {
+      setShowChart(false);
+    }
+  }, [selected]);
+
   return (
     <div
       id={anchorId}
