@@ -15,7 +15,9 @@ export function MonthFilter({ monthKeys, selected, activities }: Props) {
   const label =
     selected.length === 0
       ? "Tous les mois"
-      : `${selected.length} mois sélectionnés`;
+      : selected.length === 1
+        ? "1 mois sélectionné"
+        : `${selected.length} mois sélectionnés`;
 
   return (
     <div className="relative">
