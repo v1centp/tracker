@@ -4,7 +4,6 @@ import { StatTile } from "./components/StatTile";
 import { MonthCard } from "./components/MonthCard";
 import { ActivityFilter } from "./components/ActivityFilter";
 import { MonthFilter } from "./components/MonthFilter";
-import { RefreshBar } from "./components/RefreshBar";
 import {
   appendTrainingEntry,
   deleteTrainingEntry,
@@ -265,7 +264,6 @@ export default async function Home({
   return (
     <div className="min-h-screen bg-linear-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50">
       <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6 sm:py-12">
-        <RefreshBar />
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-2">
             <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Vue continue</p>
