@@ -20,6 +20,24 @@ export type DayCell = { day: string };
 const ACTIVITY_TABLE = "SZ_activity";
 const SPORT_TABLE = "SZ_list_activity";
 
+// Supabase REST defaults to 1k rows; page through results so the client sees everything.
+async function fetchAllSupabaseRows<T>(path: string, pageSize = 1000) {
+  const rows: T[] = [];
+  let start = 0;
+
+  while (true) {
+    const res = await supabaseFetch(path, {
+      headers: { Range: `${start}-${start + pageSize - 1}` },
+    });
+    const page = (await res.json()) as T[];
+    rows.push(...page);
+    if (page.length < pageSize || page.length === 0) break;
+    start += pageSize;
+  }
+
+  return rows;
+}
+
 export function formatDay(date: Date) {
   const y = date.getUTCFullYear();
   const m = `${date.getUTCMonth() + 1}`.padStart(2, "0");
@@ -36,16 +54,13 @@ function toISODate(value?: string | null) {
 
 export async function fetchTrainingEntries(): Promise<TrainingEntry[]> {
   try {
-    const res = await supabaseFetch(
-      `/rest/v1/${ACTIVITY_TABLE}?select=id,activity,day,length,comment&order=day.asc`,
-    );
-    const data = (await res.json()) as {
+    const data = await fetchAllSupabaseRows<{
       id?: number;
       activity?: string;
       day?: string;
       length?: number;
       comment?: string;
-    }[];
+    }>(`/rest/v1/${ACTIVITY_TABLE}?select=id,activity,day,length,comment&order=day.asc`);
     return data
       .filter((row) => row.activity && row.day && row.id !== undefined)
       .map((row) => ({
@@ -63,10 +78,11 @@ export async function fetchTrainingEntries(): Promise<TrainingEntry[]> {
 
 export async function fetchSports(): Promise<Sport[]> {
   try {
-    const res = await supabaseFetch(
-      `/rest/v1/${SPORT_TABLE}?select=id,activity,color&order=id.asc`,
-    );
-    const data = (await res.json()) as { id?: number; activity?: string; color?: string }[];
+    const data = await fetchAllSupabaseRows<{
+      id?: number;
+      activity?: string;
+      color?: string;
+    }>(`/rest/v1/${SPORT_TABLE}?select=id,activity,color&order=id.asc`);
     return data
       .filter((row) => row.activity && row.id !== undefined)
       .map((row) => ({
@@ -81,10 +97,9 @@ export async function fetchSports(): Promise<Sport[]> {
 
 export async function fetchDateCatalog(): Promise<DayCell[]> {
   try {
-    const res = await supabaseFetch(
+    const data = await fetchAllSupabaseRows<{ day?: string }>(
       `/rest/v1/${ACTIVITY_TABLE}?select=day&order=day.asc&distinct=day`,
     );
-    const data = (await res.json()) as { day?: string }[];
     return data
       .map((row) => (row.day ? toISODate(row.day) : null))
       .filter((d): d is string => Boolean(d))
