@@ -26,7 +26,7 @@ type Props = {
   anchorId?: string;
   activityFilters?: string[];
   onAddEntry?: (formData: FormData) => Promise<void>;
-  onDeleteEntry?: (formData: FormData) => Promise<void>;
+  onDeleteEntry?: (id: number) => Promise<void>;
 };
 
 export function MonthCard({
@@ -48,13 +48,20 @@ export function MonthCard({
 }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
+  const [viewDays, setViewDays] = useState<CalendarDay[]>(days);
   const [selected, setSelected] = useState<CalendarDay | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  useEffect(() => {
+    setViewDays(days);
+  }, [days]);
+
   useEffect(() => {
     if (!selected) return;
-    const match = days.find((d) => d.dateKey === selected.dateKey && d.day === selected.day);
+    const match = viewDays.find((d) => d.dateKey === selected.dateKey && d.day === selected.day);
     setSelected(match ?? null);
-  }, [days, selected]);
-
+  }, [viewDays, selected]);
   const selectedSummary = useMemo(() => {
     if (!selected || !selected.entries.length) return null;
     const totalMinutes = selected.entries.reduce(
@@ -69,7 +76,7 @@ export function MonthCard({
 
   const dayMetrics = useMemo(
     () =>
-      days
+      viewDays
         .filter((d) => d.day !== null && d.dateKey)
         .map((d) => {
           const minutes = d.entries.reduce(
@@ -92,8 +99,33 @@ export function MonthCard({
             entries: d.entries,
           };
         }),
-    [days],
+    [viewDays],
   );
+
+  const viewActiveDays = useMemo(
+    () =>
+      new Set(
+        viewDays
+          .filter((d) => d.day !== null && d.entries.length > 0)
+          .map((d) => d.dateKey ?? ""),
+      ).size,
+    [viewDays],
+  );
+
+  const viewMonthMinutes = useMemo(
+    () =>
+      viewDays.reduce(
+        (sum, d) => sum + d.entries.reduce((inner, e) => inner + (e.lengthMinutes ?? 0), 0),
+        0,
+      ),
+    [viewDays],
+  );
+
+  const viewCompletion = useMemo(() => {
+    const totalDays = viewDays.filter((d) => d.day !== null).length;
+    if (totalDays === 0) return 0;
+    return Math.round((viewActiveDays / totalDays) * 100);
+  }, [viewDays, viewActiveDays]);
 
   const [showChart, setShowChart] = useState(false);
   const [metric, setMetric] = useState<"temps" | "seances">("temps");
@@ -148,7 +180,14 @@ export function MonthCard({
     }
   }, [selected]);
 
-  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const headerDays = useMemo(
+    () =>
+      weekdays.map((weekday, idx) => ({
+        id: `weekday-${anchorId ?? monthName}-${idx}`,
+        label: weekday,
+      })),
+    [weekdays, anchorId, monthName],
+  );
 
   return (
     <div
@@ -162,7 +201,7 @@ export function MonthCard({
           <p className="text-sm uppercase tracking-[0.16em] text-slate-400">Mois</p>
           <p className="text-2xl font-semibold text-white">{monthName}</p>
           <p className="text-xs text-slate-300">
-            {activeDays} jour{activeDays === 1 ? "" : "s"} actif{activeDays === 1 ? "" : "s"}
+            {viewActiveDays} jour{viewActiveDays === 1 ? "" : "s"} actif{viewActiveDays === 1 ? "" : "s"}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -181,22 +220,22 @@ export function MonthCard({
           <div className="relative h-24 w-12 overflow-hidden rounded-full bg-slate-800/80 ring-1 ring-white/10">
             <div
               className="absolute bottom-0 w-full bg-gradient-to-t from-amber-500 via-orange-400 to-yellow-200"
-              style={{ height: `${Math.max(6, completion)}%` }}
+              style={{ height: `${Math.max(6, viewCompletion)}%` }}
             />
             <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-white">
-              {completion}%
+              {viewCompletion}%
             </span>
           </div>
         </div>
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
-        <StatBox label="Durée" value={monthHours} />
+        <StatBox label="Durée" value={formatDuration(viewMonthMinutes)} />
         <StatBox
           label="Séances"
-          value={`${days.reduce((sum, d) => sum + d.entries.length, 0)}`}
+          value={`${viewDays.reduce((sum, d) => sum + d.entries.length, 0)}`}
         />
-        <StatBox label="Jours actifs" value={`${activeDays}`} />
+        <StatBox label="Jours actifs" value={`${viewActiveDays}`} />
       </div>
 
       {sportSummary.length ? (
@@ -287,12 +326,12 @@ export function MonthCard({
 
       <div className="mt-5 space-y-2">
         <div className="grid grid-cols-7 gap-2 text-center text-[11px] uppercase tracking-[0.16em] text-slate-400 sm:text-xs">
-          {weekdays.map((weekday, idx) => (
-            <span key={`weekday-${idx}`}>{weekday}</span>
+          {headerDays.map((weekday) => (
+            <span key={weekday.id}>{weekday.label}</span>
           ))}
         </div>
         <div className="grid grid-cols-7 gap-2">
-          {days.map((day, idx) => {
+          {viewDays.map((day, idx) => {
             if (day.day === null) {
               return (
                 <div
@@ -346,7 +385,7 @@ export function MonthCard({
         <div
           className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setSelected(null);
+            if (e.target === e.currentTarget && !adding && deletingId === null) setSelected(null);
           }}
         >
           <div className="w-full max-w-lg rounded-3xl bg-slate-900 p-5 shadow-2xl ring-1 ring-white/10">
@@ -363,7 +402,10 @@ export function MonthCard({
               <button
                 type="button"
                 className="rounded-full bg-white/10 px-3 py-1 text-sm text-white ring-1 ring-white/10 transition hover:bg-white/20"
-                onClick={() => setSelected(null)}
+                onClick={() => {
+                  if (!adding && deletingId === null) setSelected(null);
+                }}
+                disabled={adding || deletingId !== null}
               >
                 Fermer
               </button>
@@ -391,27 +433,32 @@ export function MonthCard({
                           ) : null}
                         </div>
                       </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-white">
-                {entry.lengthMinutes ? formatDuration(entry.lengthMinutes) : "—"}
-              </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-white">
+                          {entry.lengthMinutes ? formatDuration(entry.lengthMinutes) : "—"}
+                        </span>
                         {entry.id && onDeleteEntry ? (
                           <button
                             type="button"
                             onClick={async () => {
                               if (!entry.id) return;
                               setDeletingId(entry.id);
-                              const formData = new FormData();
-                              formData.set("id", `${entry.id}`);
                               try {
-                                await onDeleteEntry(formData);
+                                setViewDays((current) =>
+                                  current.map((d) =>
+                                    d.dateKey === selected?.dateKey
+                                      ? { ...d, entries: d.entries.filter((e) => e.id !== entry.id) }
+                                      : d,
+                                  ),
+                                );
+                                await onDeleteEntry(entry.id);
                                 startTransition(() => router.refresh());
                                 setSelected(null);
                               } finally {
                                 setDeletingId((current) => (current === entry.id ? null : current));
                               }
                             }}
-                            disabled={deletingId === entry.id}
+                            disabled={deletingId === entry.id || adding}
                             className="flex h-8 w-8 items-center justify-center rounded-full border border-red-400/50 bg-red-500/20 text-red-200 transition hover:bg-red-500/30 disabled:cursor-not-allowed disabled:opacity-60"
                             title="Supprimer la séance"
                             aria-label="Supprimer la séance"
@@ -453,12 +500,41 @@ export function MonthCard({
                 <p className="text-sm text-slate-300">Pas encore de séance pour ce jour.</p>
               )}
               <form
-                action={async (formData) => {
-                  if (onAddEntry) {
+                onSubmit={async (event) => {
+                  event.preventDefault();
+                  if (!selected?.dateKey || !onAddEntry) return;
+                  const formData = new FormData(event.currentTarget);
+                  const sport = formData.get("sport")?.toString().trim() ?? "";
+                  const hours = Number(formData.get("hours") ?? 0) || 0;
+                  const minutes = Number(formData.get("minutes") ?? 0) || 0;
+                  const commentValue = formData.get("comment")?.toString().trim();
+                  const comment = commentValue ? commentValue : undefined;
+                  formData.set("day", selected.dateKey ?? "");
+                  setViewDays((current) =>
+                    current.map((d) => {
+                      if (d.dateKey !== selected.dateKey) return d;
+                      return {
+                        ...d,
+                        entries: [
+                          ...d.entries,
+                          {
+                            sport,
+                            day: selected.dateKey ?? "",
+                            lengthMinutes: hours * 60 + minutes,
+                            comment,
+                          },
+                        ],
+                      };
+                    }),
+                  );
+                  setAdding(true);
+                  try {
                     await onAddEntry(formData);
+                    startTransition(() => router.refresh());
+                    setSelected(null);
+                  } finally {
+                    setAdding(false);
                   }
-                  startTransition(() => router.refresh());
-                  setSelected(null);
                 }}
                 className="space-y-3 rounded-2xl bg-white/5 p-4 ring-1 ring-white/10"
               >
@@ -484,23 +560,23 @@ export function MonthCard({
                       ))}
                     </select>
                   </label>
-                <div className="flex flex-1 gap-2">
-                  <label className="flex w-1/2 flex-col text-xs uppercase tracking-[0.08em] text-slate-400">
-                    Heures
-                    <input
-                      type="number"
-                      name="hours"
-                      min="0"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      className="mt-1 w-full rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-white/20 focus:ring-white/30"
-                    />
-                  </label>
-                  <label className="flex w-1/2 flex-col text-xs uppercase tracking-[0.08em] text-slate-400">
-                    Minutes
-                    <input
-                      type="number"
-                      name="minutes"
+                  <div className="flex flex-1 gap-2">
+                    <label className="flex w-1/2 flex-col text-xs uppercase tracking-[0.08em] text-slate-400">
+                      Heures
+                      <input
+                        type="number"
+                        name="hours"
+                        min="0"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        className="mt-1 w-full rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white outline-none ring-1 ring-transparent transition focus:border-white/20 focus:ring-white/30"
+                      />
+                    </label>
+                    <label className="flex w-1/2 flex-col text-xs uppercase tracking-[0.08em] text-slate-400">
+                      Minutes
+                      <input
+                        type="number"
+                        name="minutes"
                         min="0"
                         max="59"
                         inputMode="numeric"
@@ -520,9 +596,21 @@ export function MonthCard({
                 <div className="flex justify-end">
                   <button
                     type="submit"
-                    className="rounded-xl bg-gradient-to-r from-orange-500 via-amber-400 to-yellow-300 px-4 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-orange-500/30 transition hover:brightness-105"
+                    disabled={adding}
+                    className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 via-amber-400 to-yellow-300 px-4 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-orange-500/30 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
                   >
-                    Ajouter une séance
+                    {adding ? (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        className="h-4 w-4 animate-spin text-slate-900"
+                      >
+                        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+                        <path d="M21 12a9 9 0 0 1-9 9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                      </svg>
+                    ) : null}
+                    {adding ? "Enregistrement..." : "Ajouter une séance"}
                   </button>
                 </div>
               </form>

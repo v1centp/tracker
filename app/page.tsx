@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { revalidatePath } from "next/cache";
+import Link from "next/link";
 import { StatTile } from "./components/StatTile";
 import { MonthCard } from "./components/MonthCard";
 import { ActivityFilter } from "./components/ActivityFilter";
@@ -9,7 +9,6 @@ import {
   deleteTrainingEntry,
   fetchSports,
   fetchTrainingEntries,
-  fetchDateCatalog,
   TrainingEntry,
   formatHours,
   formatDay,
@@ -65,6 +64,9 @@ function getCalendar(
   return days;
 }
 
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+
 async function addEntryAction(formData: FormData) {
   "use server";
   const sport = formData.get("sport")?.toString().trim() ?? "";
@@ -86,10 +88,8 @@ async function addEntryAction(formData: FormData) {
   revalidatePath("/");
 }
 
-async function deleteEntryAction(formData: FormData) {
+async function deleteEntryAction(id: number) {
   "use server";
-  const idValue = formData.get("id");
-  const id = typeof idValue === "string" ? Number(idValue) : null;
   if (!id) return;
   await deleteTrainingEntry(id);
   revalidatePath("/");
@@ -101,11 +101,7 @@ export default async function Home({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = (searchParams ? await searchParams : {}) ?? {};
-  const [entries, sports, catalog] = await Promise.all([
-    fetchTrainingEntries(),
-    fetchSports(),
-    fetchDateCatalog(),
-  ]);
+  const [entries, sports] = await Promise.all([fetchTrainingEntries(), fetchSports()]);
   const sortedEntries = [...entries].sort(
     (a, b) =>
       new Date(`${a.day}T00:00:00Z`).getTime() - new Date(`${b.day}T00:00:00Z`).getTime(),
@@ -288,12 +284,12 @@ export default async function Home({
             activities={requestedActivity}
           />
           {selectedMonthKeys.length > 0 && selectedMonthKeys[0] !== defaultMonthKey ? (
-            <a
+            <Link
               href="/"
               className="rounded-xl border border-white/10 bg-transparent px-3 py-2 text-sm text-slate-200 transition hover:border-white/30"
             >
               Réinitialiser les mois
-            </a>
+            </Link>
           ) : null}
         </div>
 
