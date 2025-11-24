@@ -29,6 +29,7 @@ body {
 button {
   cursor: pointer;
   transition: transform 160ms ease, filter 160ms ease;
+  touch-action: manipulation;
 }
 
 button:hover:not(:disabled) {
