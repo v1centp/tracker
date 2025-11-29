@@ -7,6 +7,8 @@ export type TrainingEntry = {
   day: string; // YYYY-MM-DD
   lengthMinutes?: number;
   comment?: string;
+  planned?: boolean;
+  done?: boolean;
 };
 
 export type Sport = {
@@ -60,7 +62,11 @@ export async function fetchTrainingEntries(): Promise<TrainingEntry[]> {
       day?: string;
       length?: number;
       comment?: string;
-    }>(`/rest/v1/${ACTIVITY_TABLE}?select=id,activity,day,length,comment&order=day.asc`);
+      planned?: boolean;
+      done?: boolean;
+    }>(
+      `/rest/v1/${ACTIVITY_TABLE}?select=id,activity,day,length,comment,planned,done&order=day.asc`,
+    );
     return data
       .filter((row) => row.activity && row.day && row.id !== undefined)
       .map((row) => ({
@@ -69,6 +75,8 @@ export async function fetchTrainingEntries(): Promise<TrainingEntry[]> {
         day: toISODate(row.day) ?? "",
         lengthMinutes: row.length ?? undefined,
         comment: row.comment ?? undefined,
+        planned: row.planned ?? false,
+        done: row.done ?? false,
       }))
       .filter((row) => row.day);
   } catch {
@@ -117,6 +125,22 @@ export async function appendTrainingEntry(entry: TrainingEntry) {
       day: entry.day,
       length: entry.lengthMinutes,
       comment: entry.comment,
+      planned: entry.planned,
+      done: entry.done,
+    }),
+  });
+}
+
+export async function updateTrainingEntry(id: number, patch: Partial<TrainingEntry>) {
+  await supabaseFetch(`/rest/v1/${ACTIVITY_TABLE}?id=eq.${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      activity: patch.sport,
+      day: patch.day,
+      length: patch.lengthMinutes,
+      comment: patch.comment,
+      planned: patch.planned,
+      done: patch.done,
     }),
   });
 }

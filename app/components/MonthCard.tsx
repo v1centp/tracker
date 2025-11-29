@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Sport, TrainingEntry } from "@/lib/data";
 import { formatDuration } from "@/lib/time";
@@ -15,6 +15,8 @@ type Props = {
   monthName: string;
   days: CalendarDay[];
   activeDays: number;
+  totalDays: number;
+  plannedTotal: number;
   completion: number;
   monthHours: string;
   weekdays: string[];
@@ -27,12 +29,15 @@ type Props = {
   activityFilters?: string[];
   onAddEntry?: (formData: FormData) => Promise<void>;
   onDeleteEntry?: (id: number) => Promise<void>;
+  onUpdateEntry?: (id: number, patch: Partial<TrainingEntry>) => Promise<void>;
 };
 
 export function MonthCard({
   monthName,
   days,
   activeDays,
+  totalDays,
+  plannedTotal,
   completion,
   monthHours,
   weekdays,
@@ -45,12 +50,14 @@ export function MonthCard({
   activityFilters = [],
   onAddEntry,
   onDeleteEntry,
+  onUpdateEntry,
 }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [selected, setSelected] = useState<CalendarDay | null>(null);
   const [adding, setAdding] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!selected) return;
@@ -98,6 +105,10 @@ export function MonthCard({
   );
 
   const [showChart, setShowChart] = useState(false);
+  const sessionsCount = useMemo(
+    () => days.reduce((sum, d) => sum + d.entries.length, 0),
+    [days],
+  );
   const [metric, setMetric] = useState<"temps" | "seances">("temps");
   const chartActivities = useMemo(
     () => sportSummary.map((s) => s.name),
@@ -149,6 +160,15 @@ export function MonthCard({
       setShowChart(false);
     }
   }, [selected]);
+
+  const todayKey = useMemo(() => {
+    if (currentDayKey) return currentDayKey;
+    const now = new Date();
+    const y = now.getUTCFullYear();
+    const m = `${now.getUTCMonth() + 1}`.padStart(2, "0");
+    const d = `${now.getUTCDate()}`.padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }, [currentDayKey]);
 
   const headerDays = useMemo(
     () =>
@@ -203,9 +223,22 @@ export function MonthCard({
         <StatBox label="Durée" value={monthHours} />
         <StatBox
           label="Séances"
-          value={`${days.reduce((sum, d) => sum + d.entries.length, 0)}`}
+          value={
+            <span className="flex items-baseline gap-1">
+              <span className="text-lg text-white">{sessionsCount}</span>
+              <span className="text-xs text-slate-400">/{plannedTotal || "0"}</span>
+            </span>
+          }
         />
-        <StatBox label="Jours actifs" value={`${activeDays}`} />
+        <StatBox
+          label="Jours actifs"
+          value={
+            <span className="flex items-baseline gap-1">
+              <span className="text-lg text-white">{activeDays}</span>
+              <span className="text-xs text-slate-400">/{totalDays || ""}</span>
+            </span>
+          }
+        />
       </div>
 
       {sportSummary.length ? (
@@ -318,6 +351,8 @@ export function MonthCard({
               selected.entries.map((entry, idx) => {
                 const normalized = normalizeSport(entry.sport);
                 const color = sportColors[normalized];
+                const isFutureDay = (selected?.dateKey ?? "") > todayKey;
+                const isDone = entry.done === true;
                 return (
                   <div
                     key={`${entry.sport}-${idx}`}
@@ -331,12 +366,54 @@ export function MonthCard({
                       <div>
                         <p className="text-sm font-semibold text-white">{entry.sport}</p>
                         {entry.comment ? <p className="text-xs text-slate-300">{entry.comment}</p> : null}
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]" />
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
                       <span className="text-sm font-semibold text-white">
-                        {entry.lengthMinutes ? formatDuration(entry.lengthMinutes) : "—"}
+                        {entry.lengthMinutes ? formatDuration(entry.lengthMinutes) : ""}
                       </span>
+                      {entry.id && onUpdateEntry ? (
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <ToggleButton
+                            label="Planifiée"
+                            value={entry.planned ?? false}
+                            disabled={isFutureDay || updatingId === entry.id || deletingId === entry.id || adding}
+                            onToggle={async () => {
+                              if (!entry.id) return;
+                              if (isFutureDay) return;
+                              const nextPlanned = !(entry.planned ?? false);
+                              if (!isDone && !nextPlanned) {
+                                // Ne pas autoriser non planifié si non terminé
+                                return;
+                              }
+                              setUpdatingId(entry.id);
+                              try {
+                                await onUpdateEntry(entry.id, { planned: nextPlanned });
+                                startTransition(() => router.refresh());
+                              } finally {
+                                setUpdatingId((current) => (current === entry.id ? null : current));
+                              }
+                            }}
+                          />
+                          <ToggleButton
+                            label="Terminée"
+                            value={isDone}
+                            disabled={updatingId === entry.id || deletingId === entry.id || adding}
+                            onToggle={async () => {
+                              if (!entry.id) return;
+                              const nextDone = !isDone;
+                              setUpdatingId(entry.id);
+                              try {
+                                await onUpdateEntry(entry.id, { planned: true, done: nextDone });
+                                startTransition(() => router.refresh());
+                              } finally {
+                                setUpdatingId((current) => (current === entry.id ? null : current));
+                              }
+                            }}
+                          />
+                        </div>
+                      ) : null}
                       {entry.id && onDeleteEntry ? (
                         <button
                           type="button"
@@ -539,7 +616,7 @@ export function MonthCard({
                   </span>
                   <div className="flex w-full flex-1 items-center justify-center gap-1">
                     {hasEntries ? (
-                      renderDots(day.entries.slice(0, 3), sportColors)
+                      renderDots(day.entries.slice(0, 3), sportColors, todayKey)
                     ) : (
                       <span className="text-slate-600">—</span>
                     )}
@@ -562,25 +639,39 @@ export function MonthCard({
   );
 }
 
-function renderDots(entries: TrainingEntry[], sportColors: Record<string, string>) {
+function renderDots(entries: TrainingEntry[], sportColors: Record<string, string>, todayKey: string) {
   return entries.map((entry, index) => {
     const normalized = normalizeSport(entry.sport);
-    const color = sportColors[normalized];
+    const color = sportColors[normalized] ?? "#cbd5e1";
+    const dayValue = entry.day ?? "";
+    const isFuture = dayValue > todayKey;
+    const isToday = dayValue === todayKey;
+    const isDone = entry.done === true;
+    const planned = entry.planned ?? false;
+    const isPending = !isDone;
+    const isUnplannedPendingToday = !planned && isPending && isToday;
+
+    const style: CSSProperties = {
+      marginLeft: index > 0 ? -6 : 0,
+      backgroundColor: isDone ? color : "transparent",
+      borderColor: planned || isDone ? color : "#94a3b8",
+      borderWidth: isPending ? 2 : 1,
+      borderStyle: isPending && (planned || isFuture || isToday || isUnplannedPendingToday) ? "dashed" : "solid",
+      boxShadow: planned && isDone ? "0 0 0 2px rgba(255,255,255,0.7)" : undefined,
+    };
+
     return (
       <span
         key={`${entry.sport}-${index}`}
         className="flex h-6 w-6 items-center justify-center rounded-full ring-1 ring-black/10"
-        style={{
-          marginLeft: index > 0 ? -6 : 0,
-          backgroundColor: color ?? "#cbd5e1",
-        }}
+        style={style}
         title={entry.comment ?? entry.sport}
       />
     );
   });
 }
 
-function StatBox({ label, value }: { label: string; value: string }) {
+function StatBox({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="rounded-2xl bg-slate-900/50 px-4 py-3 text-left ring-1 ring-white/10">
       <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400">{label}</p>
@@ -591,4 +682,40 @@ function StatBox({ label, value }: { label: string; value: string }) {
 
 function normalizeSport(value: string | undefined) {
   return value?.trim().toLowerCase() ?? "";
+}
+
+function ToggleButton({
+  label,
+  value,
+  disabled,
+  onToggle,
+}: {
+  label: string;
+  value: boolean;
+  disabled?: boolean;
+  onToggle: () => void | Promise<void>;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      className={`flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+        value
+          ? "border-emerald-400/50 bg-emerald-500/20 text-emerald-50 hover:bg-emerald-500/30"
+          : "border-slate-400/40 bg-slate-800/60 text-slate-200 hover:bg-slate-800"
+      }`}
+      title={`${label} : ${value ? "oui" : "non"}`}
+      aria-label={`${label} : ${value ? "oui" : "non"}`}
+    >
+      <span>{label}</span>
+      <span
+        className={`rounded-full px-2 py-[2px] text-[10px] font-bold uppercase tracking-[0.08em] ${
+          value ? "bg-emerald-500 text-emerald-950" : "bg-slate-500 text-slate-50"
+        }`}
+      >
+        {value ? "Oui" : "Non"}
+      </span>
+    </button>
+  );
 }

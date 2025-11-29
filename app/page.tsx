@@ -12,6 +12,7 @@ import {
   TrainingEntry,
   formatHours,
   formatDay,
+  updateTrainingEntry,
 } from "@/lib/data";
 
 type CalendarDay = {
@@ -79,11 +80,14 @@ async function addEntryAction(formData: FormData) {
   if (!sport || !day) return;
 
   const lengthMinutes = hours * 60 + minutes;
+  const isFuture = day > formatDay(new Date());
   await appendTrainingEntry({
     sport,
     day,
     lengthMinutes,
     comment,
+    planned: true,
+    done: false,
   });
   revalidatePath("/");
 }
@@ -92,6 +96,13 @@ async function deleteEntryAction(id: number) {
   "use server";
   if (!id) return;
   await deleteTrainingEntry(id);
+  revalidatePath("/");
+}
+
+async function updateEntryAction(id: number, patch: Partial<TrainingEntry>) {
+  "use server";
+  if (!id) return;
+  await updateTrainingEntry(id, patch);
   revalidatePath("/");
 }
 
@@ -147,6 +158,7 @@ export default async function Home({
             days,
             monthEntries: [],
             activeDays: 0,
+            plannedTotal: 0,
             completion: 0,
             sportSummary: [],
             key: `${year}-${month}`,
@@ -194,14 +206,10 @@ export default async function Home({
         );
         const days = getCalendar(year, month, monthEntries);
         const activeDays = new Set(monthEntries.map((entry) => entry.day)).size;
-        const completion =
-          days.filter((day) => day.day !== null).length > 0
-            ? Math.round(
-                (activeDays /
-                  days.filter((day) => day.day !== null).length) *
-                  100,
-              )
-            : 0;
+        const totalDays = days.filter((day) => day.day !== null).length;
+        const plannedTotal = monthEntries.filter((entry) => entry.planned).length;
+        const plannedDone = monthEntries.filter((entry) => entry.planned && entry.done).length;
+        const completion = plannedTotal > 0 ? Math.min(100, Math.round((plannedDone / plannedTotal) * 100)) : 0;
         const sportSummaryMap = monthEntries.reduce((acc, entry) => {
           const key = entry.sport;
           const minutes = entry.lengthMinutes ?? 0;
@@ -221,6 +229,8 @@ export default async function Home({
           days,
           monthEntries,
           activeDays,
+          totalDays,
+          plannedTotal,
           completion,
           sportSummary,
           key: monthKey,
@@ -251,6 +261,8 @@ export default async function Home({
     days: CalendarDay[];
     monthEntries: TrainingEntry[];
     activeDays: number;
+    totalDays: number;
+    plannedTotal: number;
     completion: number;
     sportSummary: { name: string; minutes: number; count: number }[];
     key: string;
@@ -294,7 +306,7 @@ export default async function Home({
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {months.map(({ index: monthIndex, year, days, monthEntries, activeDays, completion, sportSummary }) => {
+          {months.map(({ index: monthIndex, year, days, monthEntries, activeDays, totalDays, plannedTotal, completion, sportSummary }) => {
             const monthName = new Date(Date.UTC(year, monthIndex, 1)).toLocaleString("fr", {
               month: "long",
             });
@@ -305,6 +317,8 @@ export default async function Home({
                 monthName={`${monthName} ${year}`}
                 days={days}
                 activeDays={activeDays}
+                totalDays={totalDays}
+                plannedTotal={plannedTotal}
                 completion={completion}
                 monthHours={monthHours}
                 weekdays={WEEKDAYS}
@@ -314,6 +328,7 @@ export default async function Home({
                 activityFilters={activityFilters}
                 onAddEntry={addEntryAction}
                 onDeleteEntry={deleteEntryAction}
+                onUpdateEntry={updateEntryAction}
                 isCurrentMonth={
                   new Date().getUTCMonth() === monthIndex && new Date().getUTCFullYear() === year
                 }
